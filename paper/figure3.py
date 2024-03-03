@@ -13,6 +13,7 @@ topopaths = False
 
 enunroller = True
 enbloomfilter = False
+enPrimeDot = False
 
 brange = [4]
 cHrange = [(1,1)]

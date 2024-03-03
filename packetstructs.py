@@ -133,7 +133,7 @@ class PacketMinSketch(PacketStruct):
 		mask = prgn.getrandbits(32)
 		return (hash(node) ^ mask) & (2**self.size-1)
 
-	def process_loops(self, node, context):
+	def process_loops(self, node, context, index):
 		if "path" not in context:
 			context["path"] = []
 
@@ -235,7 +235,7 @@ class PacketBloomFilter(PacketStruct):
 		self.capacity = capacity
 		self.error_rate = error_rate
 
-	def process_loops(self, node, context):
+	def process_loops(self, node, context, index):
 		if "path" not in context:
 			context["path"] = []
 
@@ -283,6 +283,68 @@ class PacketBloomFilter(PacketStruct):
 		extra = extra + ["Class", "Null", "Capacity", "Errrate", "H", "Mem"]
 		super(PacketBloomFilter, PacketBloomFilter).print_header(extra)
 
+class PacketPrimeDot(PacketStruct):
+
+	def __init__(self, detections = 1):
+		super(PacketPrimeDot, self).__init__()
+
+		self.detections = detections
+		self.prime_table = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 
+			31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 
+			73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 
+			127, 131, 137, 139, 149, 151, 157,]
+
+	def process_loops(self, node, context, index):
+		if "path" not in context:
+			context["path"] = []
+
+		if "loop?" not in context:
+			context["loop?"] = False
+
+		if "detection" not in context:
+			context["detection"] = 0
+
+		if "prime_dot" not in context:
+			context["prime_dot"] = 1
+
+		if "loopstart" not in context:
+			try:
+				context["loopstart"] = context["path"].index(node)
+				context["loopsize"] = len(context["path"]) - context["loopstart"]
+			except ValueError:
+				pass
+			
+        # Compute prime
+		prime = self.prime_table[index]
+			
+        # Detect loops
+		loop = False
+		if context["prime_dot"] % prime == 0:
+			loop = True
+
+		# Loop detected, report it
+		if loop:
+			context["detection"] += 1
+			if context["detection"] >= self.detections:
+				context["loop?"] = True
+				return False
+
+		context["path"].append(node)
+		context["prime_dot"] *= prime
+
+		return True
+
+	def report(self, oneline = False):
+		nl = "," if oneline else "\n"
+
+		print self.__class__.__name__, nl,
+		print self.pcsv("Mem:"),  math.log(self.detections, 2), self.pcsv("bits"), nl,
+		super(self.__class__, self).report(oneline)
+
+	@staticmethod
+	def print_header(extra=[]):
+		# extra = extra + ["Class", "Null", "Capacity", "Errrate", "H", "Mem"]
+		super(PacketPrimeDot, PacketPrimeDot).print_header(extra)
 
 def simulate_loops(pstruct, loopsorpaths, loopnum = 1, seed = 65137):
 	prng = random.Random(seed)
@@ -301,14 +363,15 @@ def simulate_loops(pstruct, loopsorpaths, loopnum = 1, seed = 65137):
 			context = {}
 			ret = True
 
-			for src_node in path[:loopstart]:
-				ret = pstruct.process_loops(src_node, context)
+			for i, src_node in enumerate(path[:loopstart]):
+				ret = pstruct.process_loops(src_node, context, i)
 				if not ret: break
 
 			offset = 0
 			while ret and looplen > 0:
-				src_node = path[loopstart + offset % looplen]
-				ret = pstruct.process_loops(src_node, context)
+				i = loopstart + offset % looplen
+				src_node = path[i]
+				ret = pstruct.process_loops(src_node, context, i)
 				offset += 1
 
 			pstruct.finalize(context)

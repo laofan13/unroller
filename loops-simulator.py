@@ -72,10 +72,10 @@ topofile = (
 # topofile = '4'
 # topofile = '2'
 
-# Enable Unroller and/or BF simulator
+# Enable Unroller and/or BF simulator and/or BF simulator prime dot
 enunroller = True
 enbloomfilter = False
-
+enPrimeDot = False
 
 #
 ## Unroller simulator settings
@@ -216,4 +216,26 @@ if enbloomfilter:
 	if len(detections) > 1: print
 	print
 
-	## TODO set capacity according the generated loops
+#
+## Simulate BloomFilter structure
+
+if enPrimeDot:
+	PacketPrimeDot.print_header()
+	for dets in detections:
+		if genloops or genpaths:
+			for B in Brange:
+				for L in Lrange:
+					pstruct = PacketPrimeDot(detections = dets)
+					if genloops: simulate_loops(pstruct, (B,L), packets)
+					if genpaths: simulate_paths(pstruct, B+L, packets)
+					pstruct.csvrep()
+				if len(Lrange) > 1: print
+			if len(Brange) > 1: print
+		if topoloops or topopaths:
+			pstruct = PacketPrimeDot(detections = dets)
+			simulate_loops(pstruct, BLs)
+			simulate_paths(pstruct, Xs)
+			pstruct.csvrep()
+	print
+
+## TODO set capacity according the generated loops
